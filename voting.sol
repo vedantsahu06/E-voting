@@ -25,23 +25,67 @@ contract party2 {
 
 contract vote {
     // Arrays to store voter addresses and deployed contract addresses
-    address[] public voterAddressesParty1; // Stores all voter addresses for party1
+   // address[] public voterAddressesParty1; // Stores all voter addresses for party1... not needed now as can be accesed by deployed contract address
     address[] public deployedParty1Contracts; // Stores contract addresses that are deployed for party1
 
-    address[] public voterAddressesParty2; // Stores all voter addresses for party2
+   //address[] public voterAddressesParty2; // Stores all voter addresses for party2 ...not needed now as can be accesed by deployed contract address
     address[] public deployedParty2Contracts; // Stores contract addresses that are deployed for party2
 
     mapping(address => bool) public hasVoted; // Tracks if a voter has voted
-    bool public voting = true; // Voting status
+    bool public voting = false; // Voting status intially voting is stopped...
+
+  
 
 
-    address Election_commsionor=msg.sender;
+    //here authorities refers to person jiske saamne sab process hogi
+    //like candidate of both party,pooling officer,sp and Collector...to maintain a trustworthy process..
+    address[] public authorities;
+    mapping (address => bool) isSigned;
+    
+    constructor(address[] memory _owners){
+        require(_owners.length>1,"Not Enough Autohrities");
+        for(uint i=0;i<_owners.length;i++){
+            require(_owners[i]!=address(0),"Invalid authority Address given");
+            authorities.push(_owners[i]);
+        }
+    }
+
+    function toVerify(string memory _purpose) public {
+        require(!isSigned[msg.sender], "already verified.");
+        isSigned[msg.sender]=true;
+        
+    }
+
+
+
+    function has_All_Verified() public view returns (bool) {
+        uint sign_count=0;
+        for(uint i=0;i<authorities.length;i++){
+           if (isSigned[authorities[i]]==true) {sign_count+=1;} // sign count will be incremented only when authority is verified by election commisionor and not by anybody else :)
+        }
+
+        if(sign_count==authorities.length) return true;
+        else return false;
+
+
+    }
+
+
+
+
+
+
 
 
     // Toggle voting status can be done by election comissionor only.
     function toggleVoting(bool _status) public {
-        require( Election_commsionor == msg.sender , "Permission denied can only done by Election Commisnor.");
+        require( has_All_Verified() , "Permission denied, Should verified by All Members.");
         voting = _status;
+
+        //now again assinging value=false to isSigned map so that it can be reset..
+        for(uint i=0;i<authorities.length;i++){
+            isSigned[authorities[i]]=false;
+        }
     }
 
     // Generate a deterministic address for a voter using `address_type` bytecode
@@ -72,7 +116,7 @@ contract vote {
         party1 newParty1 = new party1(_voter_add);
 
         // Store voter address and contract address
-        voterAddressesParty1.push(_voter_add); // Add voter address to the voter array
+       // voterAddressesParty1.push(_voter_add); // Add voter address to the voter array
         deployedParty1Contracts.push(address(newParty1)); // Add deployed contract address
 
         // Mark the voter as having voted
@@ -88,7 +132,7 @@ contract vote {
         party2 newParty2 = new party2(_voter_add);
 
         // Store voter address and contract address
-        voterAddressesParty2.push(_voter_add); // Add voter address to the voter array
+        //voterAddressesParty2.push(_voter_add); // Add voter address to the voter array
         deployedParty2Contracts.push(address(newParty2)); // Add deployed contract address
 
         // Mark the voter as having voted
@@ -96,9 +140,9 @@ contract vote {
     }
 
     // Retrieve all voter addresses for party1
-    function getAllVoterAddressesParty1() public view returns (address[] memory) {
-        return voterAddressesParty1;
-    }
+    //function getAllVoterAddressesParty1() public view returns (address[] memory) {
+      //  return voterAddressesParty1;
+    //}
 
     // Retrieve all deployed contract addresses for party1
     function getAllDeployedContractsParty1() public view returns (address[] memory) {
@@ -106,35 +150,63 @@ contract vote {
     }
 
     // Retrieve all voter addresses for party2
-    function getAllVoterAddressesParty2() public view returns (address[] memory) {
-        return voterAddressesParty2;
-    }
+    // instead of this can use deployed address to access this
+    //function getAllVoterAddressesParty2() public view returns (address[] memory) {
+    //     return voterAddressesParty2;
+    // }
+
+    ///
+    // Retrieve all deployed contract addresses for party1
+    function getVoterFromParty1Contract(address partyAddress) public view returns (address) {
+    party1 p = party1(partyAddress); // or party2 depending on the contract
+    return p.voter();
+}
+
+
+
+    // Retrieve all deployed contract addresses for party1
+    function getVoterFromParty2Contract(address partyAddress) public view returns (address) {
+    party2 p = party2(partyAddress); // or party2 depending on the contract
+    return p.voter();
+}
+
 
     // Retrieve all deployed contract addresses for party2
     function getAllDeployedContractsParty2() public view returns (address[] memory) {
         return deployedParty2Contracts;
     }
 
+
+
     function vote_count_party1() public view returns(uint x){
-        x = voterAddressesParty1.length ; 
+        x = deployedParty1Contracts.length ; 
     }
 
     function vote_count_party2() public view returns(uint x){
-        x = voterAddressesParty2.length ; 
+        x = deployedParty2Contracts.length ; 
     }
 
-    function winner()public view returns(string memory _winner ){
-        require(!voting,"Voting is still going on");
-        require(Election_commsionor == msg.sender,"you dont have Permission to do this action");
-        uint x1 = vote_count_party1();
-        uint x2 = vote_count_party2();
+  function winner() public  returns (string memory _winner) {
+    require(!voting, "Voting is still going on");
+    require(has_All_Verified(), "Permission denied: Should be verified by All Members");
 
-        if(x1>x2){
-            return("Winner Is Party 1...!!!Congratulations");
-
-        }
-        else{
-            return("Winner Is Party 2...!!!Congratulations");
-        }
+    // Reset `isSigned` for future processes
+    for (uint i = 0; i < authorities.length; i++) {
+        isSigned[authorities[i]] = false;
     }
+
+    uint x1 = vote_count_party1();
+    uint x2 = vote_count_party2();
+
+    if (x1 > x2) {
+        _winner = "Winner Is Party 1...!!! Congratulations";
+    } else if (x2 > x1) {
+        _winner = "Winner Is Party 2...!!! Congratulations";
+    } else {
+        _winner = "There is a tie in the Election. Re-Election will be Held. Dates will be Announced shortly.";
+    }
+
+    return _winner; // Explicit return statement
+}
+
 }
